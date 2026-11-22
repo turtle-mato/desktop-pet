@@ -1,0 +1,30 @@
+# 构建产物与依赖
+node_modules/
+dist/
+target/
+release/
+work/
+
+# 缓存
+.cargo-home/
+.npm-cache/
+.edge-screen-test/
+.edge-screen-test-dom/
+.edge-screen-test-dom2/
+.tools/
+
+# 本地配置与数据（含密钥、对话记录、记忆）
+mind/config.json
+mind/data/
+mind/models/
+mind/vendor/
+
+# 本地令牌与第三方资源
+public/mind.json
+public/live2d/
+public/assets/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log

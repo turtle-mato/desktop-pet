@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>陪伴桌宠</title>
+    <style>
+      #boot-msg { font: 14px/1.6 system-ui, sans-serif; color: #9c7f90; padding: 24px; text-align: center; }
+      #boot-msg pre { white-space: pre-wrap; text-align: left; background: #fff; border: 1px solid #f3dfe9; border-radius: 10px; padding: 12px; color: #c0392b; }
+    </style>
+  </head>
+  <body>
+    <div id="app"><div id="boot-msg">⏳ 正在加载桌宠…（若长时间停留在此，请按 F12 看 Console 报错并告诉我）</div></div>
+    <script>
+      // 页面级兜底：模块加载期出错也能显示出来，方便排查
+      function showBootError(msg) {
+        var el = document.getElementById("app");
+        if (!el || el.querySelector(".pet-app")) return;
+        el.innerHTML = '<div id="boot-msg">页面启动出错：<pre>' + String(msg).replace(/[<>&]/g, function (c) { return c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;"; }) + "</pre></div>";
+      }
+      window.addEventListener("error", function (e) {
+        var msg = e.message || (e.error && e.error.stack) || String(e.error);
+        if (e.filename) msg += "\n位置: " + e.filename + ":" + e.lineno;
+        showBootError(msg);
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        showBootError("Promise 错误: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason));
+      });
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

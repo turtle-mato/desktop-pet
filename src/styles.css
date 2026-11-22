@@ -1,0 +1,935 @@
+:root {
+  --accent: #212121;
+  --bg: #ffffff;
+  --ink: #252525;
+  --muted: #737373;
+  --line: #e8e8e8;
+  --surface: #f7f7f7;
+  --surface-hover: #eeeeee;
+  --radius: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  color: var(--ink);
+  background: #f5f5f5;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 18px 12px 40px;
+}
+/* Tauri 小窗是透明、按内容调整尺寸的页面；不能继承浏览器预览页的留白和裁剪。 */
+body.mini-page {
+  display: block;
+  width: 100%;
+  min-height: 100%;
+  padding: 0;
+  background: transparent;
+  overflow: visible;
+}
+body.mini-page #app { width: 100%; min-height: 100%; overflow: visible; }
+
+/* ---------- 主容器 ---------- */
+.pet-app {
+  position: relative;
+  width: 430px;
+  max-width: 96vw;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #c7c7c7;
+  box-shadow: 0 0 0 4px rgba(199, 199, 199, 0.25);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(199, 199, 199, 0.05); } }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.tab {
+  border: 0; background: transparent; font-size: 17px; cursor: pointer;
+  padding: 4px 7px; border-radius: 10px; transition: background 0.15s;
+}
+.tab:hover { background: color-mix(in srgb, var(--accent) 22%, #ffffff); }
+
+/* ---------- 角色舞台 ---------- */
+/* 高度弹性：窗口高（受 DPI 影响）时自动收缩，保证下面的输入框永远在窗口内 */
+.stage {
+  position: relative;
+  height: 330px;
+  background: radial-gradient(ellipse at 50% 70%, #eeeeee 0%, #f8f8f8 52%, #ffffff 86%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 立绘区高度手柄：上下拖动改高度（双击恢复默认）；压在接缝上，不额外占高度 */
+.stage-grip {
+  flex: none;
+  height: 12px;
+  margin-top: -6px;
+  margin-bottom: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  position: relative;
+  z-index: 5;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.stage-grip::before {
+  content: "";
+  width: 44px;
+  height: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 30%, #ffffff);
+  transition: width 0.15s, background 0.15s;
+}
+.stage-grip:hover::before,
+.stage-grip.dragging::before {
+  width: 68px;
+  background: color-mix(in srgb, var(--accent) 75%, #ffffff);
+}
+.pet-img {
+  height: 96%;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.25));
+}
+.pet-flag {
+  position: absolute;
+  left: 12px; top: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  backdrop-filter: blur(4px);
+}
+
+/* ---------- 活动栏 ---------- */
+.activity-bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 10px 14px 4px;
+}
+.lbl { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.chip {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, #ffffff); }
+.game-row { width: 100%; display: flex; }
+.game-row .inp { flex: 1; }
+.status {
+  flex: none;
+  line-height: 1.5;
+  padding: 2px 14px 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 聊天区 ---------- */
+.chat { display: flex; flex-direction: column; min-height: 220px; }
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 300px;
+  min-height: 150px;
+}
+.bubble {
+  flex: none;
+  max-width: 82%;
+  padding: 9px 13px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.bubble.pet {
+  align-self: flex-start;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 5px;
+}
+.bubble.pet.reminder { border-color: color-mix(in srgb, var(--accent) 55%, #ffffff); }
+.bubble.pet.initiative { border-color: color-mix(in srgb, #212121 70%, #ffffff); background: #f5f5f5; }
+.bubble.pet.sys { color: var(--muted); font-size: 12px; border-style: dashed; }
+.bubble.user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 88%, #ffffff), var(--accent));
+  color: #ffffff;
+  border-bottom-right-radius: 5px;
+}
+.bubble.thinking { color: var(--muted); font-style: italic; }
+.bubble.streaming::after { content: "▍"; animation: blink 1s step-end infinite; color: var(--accent); }
+/* 重启后恢复聊天记录时的分隔线 */
+.chat-divider {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  user-select: none;
+}
+.chat-divider::before,
+.chat-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* 输入区 */
+.quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 14px 8px;
+}
+.chip.quick { font-size: 11.5px; color: var(--muted); }
+.input-row {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--line);
+  background: #ffffff;
+}
+.inp {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  outline: none;
+  background: #fdfdfd;
+  color: var(--ink);
+  transition: border 0.15s;
+}
+.inp:focus { border-color: var(--accent); }
+.chat-inp { flex: 1; min-width: 0; }
+
+/* 发图：选文件按钮 + 待发缩略图 */
+.file-pick { display: none; }
+.btn.icon-btn {
+  flex: none;
+  width: 38px;
+  padding: 8px 0;
+  text-align: center;
+  font-size: 13px;
+}
+.btn.icon-btn.armed {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.img-preview {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: center / cover no-repeat;
+  cursor: pointer;
+  position: relative;
+}
+.img-preview::after {
+  content: "×";
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 14px;
+  text-align: center;
+}
+.btn {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn.primary {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 90%, #ffffff), var(--accent));
+  border-color: transparent;
+  color: #ffffff;
+}
+.btn:hover { filter: brightness(1.04); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.subtle { border-color: transparent; background: transparent; color: var(--muted); padding: 4px 8px; }
+
+/* ---------- 面板 ---------- */
+.panel-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(2px);
+  display: none;
+  z-index: 10;
+}
+.panel-overlay.open { display: block; }
+.panel-box {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: min(92%, 400px);
+  background: #ffffff;
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -14px 0 40px rgba(0, 0, 0, 0.18);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+.panel-body { padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.sec {
+  font-weight: 700;
+  margin: 6px 0 2px;
+  font-size: 13px;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.field-row .field { flex: 1; min-width: 90px; }
+.inp.num { width: 100%; }
+.panel-row { display: flex; gap: 6px; align-items: center; }
+.panel-row .inp { flex: 1; min-width: 0; }
+.panel-foot { margin-top: 6px; }
+.muted { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+.todo-list { display: flex; flex-direction: column; gap: 6px; }
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fafafa;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.todo-row.done .todo-text { text-decoration: line-through; color: var(--muted); }
+.todo-text { flex: 1; word-break: break-all; }
+.todo-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+
+.mem-list { display: flex; flex-direction: column; gap: 6px; }
+.mem-row {
+  background: #fafafa;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+/* 思维系统记忆面板（日记 / 情景 / 回收站） */
+.mem-status { padding: 6px 0 8px; font-size: 12px; line-height: 1.5; }
+.mem-tabs { flex-wrap: wrap; margin-bottom: 8px; }
+.mem-view { display: flex; flex-direction: column; gap: 8px; }
+.mem-diary { display: flex; flex-direction: column; gap: 8px; }
+.mem-diary-text { width: 100%; font-size: 13px; line-height: 1.6; resize: vertical; }
+.mem-edit { display: flex; flex-direction: column; gap: 6px; }
+.mem-edit .field { margin: 0; }
+.mem-raw summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.mem-raw .mem-row { margin-top: 6px; background: #ffffff; }
+.mem-row .btn { margin-top: 6px; }
+.pomo-time { font-size: 22px; font-weight: 700; text-align: center; padding: 16px 0 4px; }
+.pomo-ctrl { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+/* 桌面版（Tauri）：页面透明、窗口铺满、无边框拖动区与窗口按钮 */
+html.desktop, body.desktop {
+  background: transparent !important;
+  padding: 0;
+  overflow: hidden;
+}
+html.desktop body { display: block; }
+body.desktop .pet-app {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  border: none;
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+/* 桌面弹性布局：聊天记录区伸缩，输入框永远固定在底部 */
+/* 立绘区高度：你拖过就用你记住的（--stage-h），没拖过才用默认弹性高度。
+   flex:none = 不再被聊天记录挤小 —— 聊天区自己滚动。 */
+body.desktop .stage { height: var(--stage-h, clamp(220px, 40vh, 360px)); flex: none; }
+/* Only the history viewport takes leftover height. Content-sized flex bases
+   otherwise squeeze the status line to its padding when history is restored. */
+body.desktop .chat { flex: 1 1 0; min-height: 0; }
+body.desktop:not(.compact) .chat { overflow: hidden; }
+body.desktop .chat-log { flex: 1 1 0; min-height: 0; max-height: none; }
+.topbar { -webkit-user-select: none; user-select: none; }
+.win-ctrl { display: flex; gap: 2px; align-items: center; margin-left: 6px; }
+.winbtn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 1;
+}
+.winbtn:hover { background: rgba(0, 0, 0, 0.08); color: var(--ink); }
+.winbtn.pinned { color: var(--accent); }
+/* IPC 异常时：顶栏小圆点变红（窗口按钮失效的可见信号） */
+body.ipc-bad .dot { background: #686868; box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.25); }
+
+/* 自由缩放：四边/四角手柄（无边框窗口的自绘缩放区） */
+.resize-handle { position: absolute; z-index: 40; touch-action: none; }
+.rh-n { top: 0; left: 14px; right: 14px; height: 7px; cursor: ns-resize; }
+.rh-s { bottom: 0; left: 14px; right: 14px; height: 7px; cursor: ns-resize; }
+.rh-e { right: 0; top: 14px; bottom: 14px; width: 7px; cursor: ew-resize; }
+.rh-w { left: 0; top: 14px; bottom: 14px; width: 7px; cursor: ew-resize; }
+.rh-ne { top: 0; right: 0; width: 18px; height: 18px; cursor: nesw-resize; }
+.rh-sw { bottom: 0; left: 0; width: 18px; height: 18px; cursor: nesw-resize; }
+.rh-nw { top: 0; left: 0; width: 18px; height: 18px; cursor: nwse-resize; }
+.rh-se { bottom: 0; right: 0; width: 18px; height: 18px; cursor: nwse-resize; }
+
+/* 紧凑模式浮层工具条（桌面，位于右上角） */
+.float-tools {
+  display: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 30;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 4px;
+  backdrop-filter: blur(4px);
+}
+body.compact .float-tools { display: flex; }
+
+/* ===== 紧凑模式：只留立绘 + 聊天小框，且不画卡片边框 ===== */
+body.compact .topbar,
+body.compact .activity-bar,
+body.compact .status,
+body.compact .quick-row,
+body.compact .pet-flag { display: none; }
+body.compact .pet-app {
+  background: transparent;   /* 无卡片底色 */
+  border: none;              /* 无边框 */
+  box-shadow: none;          /* 无阴影（浮在桌面上而非卡片感） */
+  overflow: visible;         /* 不裁剪，让立绘阴影自然呈现 */
+  border-radius: 0;
+}
+body.compact .stage {
+  height: calc(100vh - 126px);
+  flex: none;
+  border-bottom: none;
+  background: transparent;   /* 立绘区无底色，只有图本身 */
+}
+body.compact .stage .pet-img { height: 100%; }
+body.compact .chat { position: relative; flex: none; height: 126px; }
+body.compact .chat-log {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 58px;
+  max-height: 150px;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(6px);
+}
+body.compact .input-row {
+  background: transparent;
+  border: none;
+  padding: 8px 14px 12px;
+}
+body.compact .chat-inp {
+  border-radius: 999px;
+  border: 1px solid rgba(217, 217, 217, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+body.compact .btn.primary { border-radius: 999px; }
+/* 输入框获得焦点时浮起 */
+body.compact .chat-inp:focus { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2); }
+
+/* ===== 立绘小窗（mini，透明浮窗：角色 + 对话框）===== */
+.mini-wrap {
+  --mini-canvas-pad: 48px;
+  padding: var(--mini-canvas-pad);
+  width: 100vw;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  /* 内容在窗口里垂直居中：窗口高度会比内容多 24px（fitWindow 的余量），
+     不居中的话多出来的全堆在下面，看起来像立绘偏上 */
+  justify-content: flex-start;
+  overflow: visible;
+  /* 小窗里立绘的宽度（绝对像素）：窗口和判定框都按它算，
+     所以"窗口贴着立绘"这件事不依赖窗口自身的宽度，不会互相循环依赖。
+     高度 = 这个宽度 ÷ 立绘实际像素的宽高比（下面 .mini-canvas-wrap 的 aspect-ratio）。
+     这两个数是用 .tools/cdp-bounds.mjs 量出来的：立绘实际像素 115x188 → 0.612。 */
+  --mini-char-w: 200px;
+  /* 画布宽高比 = 画布宽 ÷ 画布高。
+     高度决定立绘大小（缩放取 min，现在由高度限制），所以：
+       想加宽左右余地（头发摆动不被切）→ 只加宽 --mini-char-w、同时把 aspect 按比例加上去，
+       立绘大小不变；想改立绘大小 → 改高度（aspect 与宽度一起动）。
+     注意：居中是按"两只脚的中点"，而她的头发在脚中线左右并不对称（左侧多约 13px），
+     所以左右留白天生不一样，这是对的。 */
+  --mini-char-aspect: 0.806;
+}
+/* 默认只显示角色；点角色后浮现对话框 */
+.mini-wrap.chat-off .mini-chat { display: none; }
+.mini-stage {
+  position: relative;
+  flex: none;
+  width: max-content;   /* 判定框 = 立绘那一块，左右不留能点能拖的空白 */
+  margin: 0 auto;
+  padding: 20px;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mini-stage:active { cursor: grabbing; }
+.mini-img {
+  display: block;
+  width: var(--mini-char-w);
+  margin: 0 auto;
+  height: auto;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.2));
+}
+.mini-chat {
+  margin: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  padding: 6px 8px 4px;
+}
+.mini-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 4px;
+}
+.mini-name { font-size: 12px; font-weight: 700; color: var(--ink); }
+.mini-tools { display: flex; gap: 2px; }
+.screen-power { align-self: center; flex: none; white-space: nowrap; border: 1px solid #d3d3d3; border-radius: 8px; padding: 3px 6px; background: #f1f1f1; color: #5d5d5d; font: inherit; font-size: 11px; cursor: pointer; }
+.screen-power[aria-checked="true"] { border-color: #8f8f8f; background: #f1f1f1; color: #585858; }
+.screen-power:hover { filter: brightness(.96); }
+.screen-power:disabled { opacity: .65; cursor: wait; }
+.screen-power:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.screen-power[data-error="true"] { border-color: #727272; color: #555555; }
+.mini-body { height: 88px; }
+.mini-body .chat-log {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  padding: 2px 4px;
+}
+.mini-body .bubble { font-size: 12.5px; padding: 6px 10px; max-width: 88%; }
+.mini-body .input-row { border: none; background: transparent; }
+.mini-input { border: none !important; background: transparent !important; padding: 6px 2px 2px; }
+
+/* 她眼中的屏幕：语义在前，原始识别留在默认折叠的原生详情中。 */
+.mini-wrap.chat-off .mini-screen, .mini-screen[hidden] { display: none; }
+.mini-screen-switch { align-self: center; border: 1px solid transparent; border-radius: 8px; padding: 3px 7px; background: transparent; color: #727272; font: inherit; font-size: 11px; cursor: pointer; }
+.mini-screen-switch[aria-checked="true"] { border-color: #d3d3d3; background: #f1f1f1; color: #4e4e4e; }
+.mini-screen-switch:hover { background: #e6e6e6; }
+.mini-screen-switch:focus-visible { outline: 2px solid #828282; outline-offset: 1px; }
+.mini-screen {
+  --mini-screen-preferred-height: 300px;
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  max-height: min(var(--mini-screen-preferred-height), var(--mini-screen-height-budget, 300px));
+  margin: 0 12px 12px;
+  padding: 9px 11px;
+  overflow: auto;
+  box-sizing: border-box;
+  border: 1px solid #dedede;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #3c3c3c;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+  scrollbar-width: thin;
+}
+.mini-screen[data-expanded="true"] { --mini-screen-preferred-height: 420px; }
+.main-screen-switch { font-size: 12px; white-space: nowrap; color: var(--muted); }
+.main-screen-switch[aria-expanded="true"] { color: var(--accent); background: #f1f1f1; }
+.main-screen-readout {
+  position: absolute;
+  z-index: 35;
+  top: 54px;
+  right: 8px;
+  width: min(360px, calc(100% - 16px));
+  max-height: min(480px, calc(100% - 70px));
+  margin: 0;
+  box-shadow: 0 8px 30px #30303026;
+}
+.main-screen-readout .mini-screen-head { flex-wrap: wrap; }
+.main-screen-close { margin-left: auto; }
+.main-screen-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mini-screen-head, .mini-screen-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mini-screen-head { margin-bottom: 4px; }
+.mini-screen-page { margin: 4px 0; font-weight: 600; }
+.mini-screen-content { margin: 4px 0; }
+.mini-screen-activity { margin-top: 4px; max-height: 54px; overflow: auto; white-space: pre-wrap; }
+.mini-screen-focus { margin-top: 3px; max-height: 32px; overflow: auto; color: #727272; font-size: 11px; }
+.mini-screen-moment { margin-top: 5px; max-height: 54px; overflow: auto; white-space: pre-wrap; color: #5c5c5c; }
+.mini-screen-details { margin-top: 6px; border-top: 1px solid #e5e5e5; padding-top: 5px; }
+.mini-screen-details > summary { cursor: pointer; color: #727272; font-size: 11px; }
+.mini-screen-details[open] > summary { margin-bottom: 5px; }
+.mini-screen-status { color: #5b5b5b; font-size: 11px; }
+.mini-screen[data-status="paused"] .mini-screen-status, .mini-screen[data-status="error"] .mini-screen-status { color: #5d5d5d; }
+.mini-screen-title { max-height: 36px; overflow: auto; }
+.mini-screen-label { margin-top: 5px; color: #5b5b5b; font-size: 11px; }
+.mini-screen-toggle { flex: none; padding: 1px 5px; border: 1px solid #dedede; border-radius: 5px; background: #ffffff; color: inherit; font: inherit; cursor: pointer; }
+.mini-screen-ocr, .mini-screen-ai { white-space: pre-wrap; overflow: auto; scrollbar-width: thin; }
+.mini-screen-ocr { max-height: 54px; }
+.mini-screen[data-expanded="true"] .mini-screen-ocr { max-height: 180px; }
+.mini-screen-ai { max-height: 54px; }
+.mini-screen-reason { margin-top: 6px; }
+.mini-screen-time, .mini-screen-counts, .mini-screen-captured, .mini-screen-updated { display: block; margin-top: 3px; color: #5b5b5b; font-size: 11px; }
+.mini-screen-counts[hidden] { display: none; }
+.mini-screen-previous { margin-bottom: 4px; color: #5d5d5d; font-size: 11px; font-weight: 600; }
+.mini-screen-previous[hidden] { display: none; }
+.mini-screen-focus[hidden], .mini-screen-moment[hidden] { display: none; }
+.mini-screen :focus-visible { outline: 2px solid #828282; outline-offset: 1px; }
+
+/* 她主动开口时的浮气泡：小窗是透明的，不浮出来就等于没说 */
+.mini-bubble {
+  position: relative;
+  flex: none;
+  /* 窗口宽度由立绘决定，气泡不能跟着文字撑，否则会顶出窗口被裁 */
+  width: calc(100% - 24px);
+  box-sizing: border-box;
+  margin: 4px 12px 0;
+  padding: 14px 16px 10px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: left;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10);
+  cursor: default;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.mini-bubble.show { opacity: 1; transform: translateY(0); }
+.mini-bubble[hidden] { display: none; }
+.mini-bubble-close { position: absolute; top: 5px; right: 5px; border: 0; padding: 0; background: transparent; color: #909090; border-radius: 50%; width: 24px; height: 24px; font-size: 18px; line-height: 1; cursor: pointer; }
+.mini-bubble-close:hover { color: #4e4e4e; background: rgba(0, 0, 0, 0.06); }
+.mini-bubble-text { max-height: var(--mini-bubble-text-max, 176px); padding-right: 16px; border: 0; outline: none; background: transparent; box-shadow: none; overflow-y: auto; white-space: pre-wrap; user-select: text; scrollbar-width: thin; }
+.mini-bubble-text:focus-visible { outline: none; }
+.mini-bubble button:focus-visible { outline: 2px solid #828282; outline-offset: 2px; }
+.mini-bubble-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+.mini-bubble-reply { border: 0; border-radius: 8px; padding: 3px 8px; color: #727272; background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
+.mini-bubble-reply:hover { color: #4e4e4e; background: rgba(0, 0, 0, 0.06); }
+@media (prefers-reduced-motion: reduce) { .mini-bubble { transition: none; } }
+/* 尾巴：朝下指着角色 */
+.mini-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  transform: translateX(-50%) rotate(45deg);
+  background: #ffffff;
+  border-right: 1px solid rgba(0, 0, 0, 0.10);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.10);
+  border-bottom-right-radius: 3px;
+}
+
+/* 角色卡编辑器 */
+.ta { width: 100%; min-height: 72px; resize: vertical; font-family: inherit; line-height: 1.5; }
+.color-pick { width: 64px; height: 34px; padding: 2px; cursor: pointer; }
+.slider-field { flex: 1 1 44%; min-width: 150px; }
+.slider { width: 100%; accent-color: var(--accent); margin: 2px 0; }
+.slider-num { font-size: 11px; color: var(--muted); text-align: right; }
+
+/* 人格管理 */
+.persona-list { display: flex; flex-direction: column; gap: 6px; }
+.persona-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.persona-row:hover { border-color: var(--accent); }
+.persona-row.sel { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.persona-row.active { background: color-mix(in srgb, var(--accent) 10%, #ffffff); }
+.persona-row .muted { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+textarea.prompt { width: 100%; resize: vertical; font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.6; min-height: 180px; }
+.tokens { display: flex; flex-wrap: wrap; gap: 4px; }
+.token-chip {
+  border: 1px dashed color-mix(in srgb, var(--accent) 60%, var(--line));
+  background: #ffffff;
+  border-radius: 8px;
+  font-size: 11.5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.token-chip:hover { background: color-mix(in srgb, var(--accent) 15%, #ffffff); }
+
+/* ===== 立绘适配器容器（图片 / Live2D 通用）===== */
+.pet-stage-slot {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.pet-canvas-wrap {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.pet-canvas {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+}
+.mini-stage-slot { width: 100%; display: flex; justify-content: center; }
+/* Live2D 模式：必须给 canvas 一个"确定高度"的父容器（aspect-ratio），
+   否则 <canvas> 的 height:auto 会退回它的固有比例（默认 300x150），量出来只有 ~118px 高。
+   尺寸用绝对像素 + 立绘真实宽高比，渲染器再把立绘缩放到正好填满它
+   （tightFit），于是这个框就是立绘的框。 */
+.mini-canvas-wrap {
+  --pet-render-pad: var(--mini-canvas-pad);
+  position: relative;
+  overflow: visible;
+  width: var(--mini-char-w);
+  aspect-ratio: var(--mini-char-aspect);
+  flex: none;              /* 不被 flex 拉伸/压缩，高度只由 aspect-ratio 决定 */
+  align-self: flex-start;  /* 关键：默认 stretch 会和父容器高度互相依赖（循环），量出来不稳定 */
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.mini-canvas { display: block; position: absolute; left: calc(-1 * var(--pet-render-pad)); top: calc(-1 * var(--pet-render-pad)); pointer-events: none; }
+.mini-canvas-wrap[data-view="full"] { aspect-ratio: .65; }
+.mini-canvas-wrap[data-view="upper"] { aspect-ratio: .806; }
+.pet-view-switch {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 4;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255,.8);
+  border-radius: 16px;
+  background: rgba(255, 255, 255,.88);
+  box-shadow: 0 2px 10px #3b3b3b18;
+  cursor: default;
+}
+.pet-view-switch[hidden] { display: none; }
+.pet-view-btn {
+  border: 0;
+  padding: 5px 9px;
+  border-radius: 12px;
+  background: transparent;
+  color: #676767;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.pet-view-btn[aria-pressed="true"] { background: #ebebeb; color: #525252; }
+.pet-view-btn:focus-visible { outline: 2px solid #838383; outline-offset: 1px; }
+.mini-stage .pet-view-switch { top: 0; right: 16px; }
+
+/* Mini keeps the character clear; controls stay inside its existing hit area. */
+.mini-menu-button { position: absolute; z-index: 6; top: 6px; right: 16px; width: 30px; height: 26px; padding: 0; border: 1px solid rgba(0, 0, 0,.2); border-radius: 10px; background: rgba(253, 253, 253,.9); color: #6c6c6c; font-size: 22px; line-height: 16px; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0,.05); }
+.mini-menu { position: absolute; z-index: 8; top: 37px; right: 16px; width: 208px; box-sizing: border-box; padding: 12px; border: 1px solid #dfdfdf; border-radius: 16px; background: rgba(253, 253, 253,.98); color: #4f4f4f; box-shadow: 0 8px 24px rgba(0, 0, 0,.12); cursor: default; user-select: none; }
+.mini-menu[hidden] { display: none; }
+.mini-menu-title { margin-bottom: 9px; color: #828282; font-size: 11px; letter-spacing: .12em; }
+.mini-menu .pet-view-switch { position: static; display: flex; box-shadow: none; width: 100%; box-sizing: border-box; padding: 3px; background: #ececec; border: 0; }
+.mini-menu .pet-view-switch[hidden] { display: none; }
+.mini-menu .pet-view-btn { flex: 1; color: #787878; }
+.mini-menu .pet-view-btn[aria-pressed="true"] { background: #fdfdfd; color: #494949; box-shadow: 0 1px 4px rgba(0, 0, 0,.08); }
+.mini-menu-chat { width: 100%; margin: 9px 0; padding: 8px; border: 0; border-radius: 9px; background: #e6e6e6; color: #515151; font: inherit; font-size: 12px; cursor: pointer; }
+.mini-menu-screen { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding-bottom: 9px; border-bottom: 1px solid #e9e9e9; }
+.mini-menu .screen-power, .mini-menu .mini-screen-switch { font-size: 11px; }
+.mini-menu .mini-tools { margin-top: 8px; justify-content: space-around; gap: 8px; }
+.mini-menu .winbtn { min-width: 36px; height: 27px; color: #797979; border-radius: 8px; }
+.mini-menu button:hover, .mini-menu-button:hover { filter: brightness(.97); }
+.mini-menu button:focus-visible, .mini-menu-button:focus-visible, .mini-close-chat:focus-visible { outline: 2px solid #9a9a9a; outline-offset: 2px; }
+.mini-close-chat { width: 26px; height: 24px; border: 0; border-radius: 8px; background: transparent; color: #888888; font-size: 19px; cursor: pointer; }
+.mini-chat { border-color: #e2e2e2; background: rgba(253, 253, 253,.97); box-shadow: 0 8px 24px rgba(0, 0, 0,.08); padding: 8px 10px 6px; }
+.mini-chat .mini-name { font-weight: 500; color: #777777; }
+.mini-chat .mini-body { height: 108px; }
+.mini-chat .mini-input .chat-inp { background: #f1f1f1; border-color: transparent; }
+.mini-chat .mini-input .primary { background: var(--accent); border-color: var(--accent); }
+
+/* Quiet monochrome surfaces; illustration canvases retain their original colors. */
+body { -webkit-font-smoothing: antialiased; }
+button, input, textarea, select { font-family: inherit; }
+button { transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s; }
+button:disabled { cursor: default; opacity: .45; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #8c8c8c; outline-offset: 3px; }
+::selection { background: #dedede; color: #171717; }
+.chat-log, .panel-body, .mini-screen { scrollbar-width: thin; scrollbar-color: #d4d4d4 transparent; }
+.pet-app, body.desktop .pet-app { box-shadow: 0 16px 48px rgba(0,0,0,.10); }
+.topbar { padding: 11px 14px; gap: 8px; background: #ffffff; border-bottom-color: #eeeeee; }
+.brand { flex: none; gap: 9px; font-size: 14px; letter-spacing: .01em; }
+.brand b { font-weight: 600; }
+.dot { width: 7px; height: 7px; background: #555555; box-shadow: none; animation: none; }
+body.ipc-bad .dot { border-radius: 2px; background: #171717; box-shadow: 0 0 0 3px #dddddd; }
+.tabs { gap: 3px; align-items: center; }
+.tab, .winbtn { display: inline-flex; align-items: center; justify-content: center; color: #686868; }
+.tab { min-height: 29px; padding: 5px 7px; border-radius: 8px; }
+.tab:hover, .winbtn:hover { background: #f1f1f1; color: #171717; }
+.ui-icon { display: block; width: 17px; height: 17px; flex: none; pointer-events: none; }
+.winbtn .ui-icon { width: 15px; height: 15px; }
+.winbtn.pinned { color: #171717; background: #ededed; }
+.activity-bar { gap: 5px; padding-top: 13px; padding-bottom: 7px; }
+.chip { border-color: transparent; background: #f5f5f5; color: #575757; padding: 5px 11px; }
+.chip:hover { background: #eaeaea; border-color: transparent; color: #171717; }
+.status { color: #7b7b7b; filter: grayscale(1); padding-bottom: 10px; }
+.stage-grip::before { width: 36px; background: #d5d5d5; }
+.stage-grip:hover::before, .stage-grip.dragging::before { background: #929292; }
+.pet-flag { background: rgba(255,255,255,.9); border-color: #e8e8e8; }
+.chat { background: #ffffff; }
+.chat-log { gap: 13px; padding-top: 16px; padding-bottom: 16px; }
+.bubble { line-height: 1.7; padding: 10px 14px; border-radius: 17px; }
+.bubble.pet { background: #ffffff; border-color: #eeeeee; color: #2f2f2f; border-bottom-left-radius: 6px; }
+.bubble.pet.initiative { background: #f8f8f8; border-color: #dddddd; }
+.bubble.user { background: #eeeeee; color: #252525; border-bottom-right-radius: 6px; }
+.chat-divider { font-size: 11px; color: #8c8c8c; }
+.input-row { margin: 0 14px 14px; padding: 7px; gap: 6px; align-items: center; background: #f5f5f5; border: 1px solid #e9e9e9; border-radius: 22px; }
+.input-row:focus-within { border-color: #bdbdbd; box-shadow: 0 0 0 2px rgba(0,0,0,.025); }
+.input-row .chat-inp { background: transparent; border: 0; padding: 8px 7px; box-shadow: none; }
+.input-row .chat-inp:focus-visible { outline: none; }
+.inp { background: #fafafa; }
+.inp::placeholder { color: #999999; }
+.btn { border-radius: 11px; background: #ffffff; border-color: #dfdfdf; }
+.btn:hover { filter: none; background: #f2f2f2; }
+.btn.primary { background: #212121; border-color: #212121; color: #ffffff; }
+.btn.primary:hover { background: #3a3a3a; border-color: #3a3a3a; }
+.input-row .btn.primary { min-height: 34px; border-radius: 16px; padding: 7px 14px; }
+.input-row .icon-btn { width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: #737373; }
+.input-row .icon-btn:hover { background: #e7e7e7; color: #222222; }
+.panel-overlay { background: rgba(0,0,0,.18); backdrop-filter: blur(4px); }
+.panel-box { box-shadow: -12px 0 40px rgba(0,0,0,.08); }
+.panel-head { padding: 18px; border-color: #ededed; font-size: 15px; filter: grayscale(1); }
+.panel-body { padding: 18px; gap: 12px; }
+.sec { font-weight: 600; color: #333333; filter: grayscale(1); }
+.todo-row, .mem-row { background: #f8f8f8; border-color: #eaeaea; }
+.screen-power { background: #f6f6f6; border-color: #e5e5e5; color: #6c6c6c; border-radius: 7px; }
+.screen-power[aria-checked="true"] { background: #292929; border-color: #292929; color: #ffffff; }
+.screen-power[data-error="true"] { border-color: #525252; border-style: dashed; color: #252525; }
+.main-screen-switch[aria-expanded="true"] { background: #eeeeee; color: #202020; }
+.pet-view-switch { background: rgba(255,255,255,.94); border-color: #e7e7e7; box-shadow: 0 2px 8px rgba(0,0,0,.035); }
+.pet-view-btn { color: #777777; }
+.pet-view-btn[aria-pressed="true"] { background: #ededed; color: #222222; }
+.mini-menu { background: rgba(255,255,255,.98); border-color: #e4e4e4; box-shadow: 0 10px 32px rgba(0,0,0,.10); color: #333333; }
+.mini-menu-button { background: rgba(255,255,255,.95); border-color: #e6e6e6; color: #636363; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+.mini-menu-title { color: #8a8a8a; font-size: 10px; letter-spacing: .08em; }
+.mini-menu .pet-view-switch { background: #f2f2f2; }
+.mini-menu .pet-view-btn { color: #777777; }
+.mini-menu .pet-view-btn[aria-pressed="true"] { background: #ffffff; color: #212121; }
+.mini-menu-chat { background: #242424; color: #ffffff; }
+.mini-menu-chat:hover { background: #3b3b3b; }
+.mini-menu-screen { border-color: #ededed; }
+.mini-menu .winbtn { color: #656565; }
+.mini-chat { background: rgba(255,255,255,.98); border-color: #e4e4e4; box-shadow: 0 8px 24px rgba(0,0,0,.07); }
+.mini-chat .mini-name { color: #414141; font-weight: 600; }
+.mini-chat .mini-input { margin: 6px 0 0; gap: 4px; }
+.mini-chat .mini-input .chat-inp { background: #f4f4f4; border: 1px solid #eaeaea; border-radius: 12px; }
+.mini-chat .mini-input .btn.primary { padding: 6px 10px; min-height: 32px; border-radius: 11px; }
+.mini-close-chat { color: #888888; }
+.mini-bubble { border-color: #e3e3e3; box-shadow: 0 4px 18px rgba(0,0,0,.07); }
+.mini-screen { background: rgba(255,255,255,.98); color: #3b3b3b; border-color: #e4e4e4; }
+.theme-preview { display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; color: #626262; }
+.theme-swatch { width: 17px; height: 17px; border-radius: 50%; border: 1px solid #dddddd; }
+.theme-swatch.light { background: #ffffff; }
+.theme-swatch.gray { background: #b5b5b5; border-color: #b5b5b5; }
+.theme-swatch.dark { background: #252525; border-color: #252525; }
+@media (max-width: 520px) {
+  .topbar { flex-wrap: wrap; gap: 6px; }
+  .topbar .brand { flex: 1; }
+  .topbar .tabs { order: 3; width: 100%; justify-content: flex-start; }
+  .topbar .win-ctrl { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }

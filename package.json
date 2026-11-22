@@ -1,0 +1,36 @@
+{
+  "name": "desktop-pet",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "陪伴桌宠 V1：立绘 + AI 聊天 + 记忆 + 番茄钟 + Todo + 主动提醒",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "test:daily-routines": "node scripts/test-daily-routines.mjs",
+    "test:dialogue-skill": "node scripts/test-dialogue-skill.mjs",
+    "test:conversation": "node scripts/test-conversation.mjs && node scripts/test-dialogue-grounding.mjs && node scripts/test-conversation-api.mjs",
+    "test:images": "node scripts/test-engine-images.mjs && node scripts/test-chat-images.mjs",
+    "test:layout": "node scripts/test-chat-layout.mjs",
+    "test:mini-position": "node scripts/test-mini-position.mjs",
+    "test:screen-day": "node scripts/test-screen-switch.mjs && node scripts/test-screen-day.mjs && node scripts/test-screen-evening.mjs",
+    "test:screen": "node scripts/test-screen-awareness.mjs && node scripts/test-screen-selection.mjs && node scripts/test-screen-observation.mjs && node scripts/test-screen-vision-client.mjs && node scripts/test-adaptive-screen.mjs && node scripts/test-adaptive-proactive.mjs && node scripts/test-screen-readout.mjs && node scripts/test-proactive-upgrade.mjs && node scripts/test-coview-backend.mjs && node scripts/test-coview-frontend.mjs && node scripts/test-engine-screen.mjs && node scripts/test-bubble.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "dist": "node scripts/make-dist.mjs",
+    "release": "npm run build && npm run tauri:build && npm run dist"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^6.5.10"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.7"
+  }
+}

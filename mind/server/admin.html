@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>她的控制台</title>
+<style>
+  :root { --accent:#4d6bfe; --ink:#1c2333; --muted:#7a8699; --line:#e3e8f4; --bg:#f5f8ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif; color:var(--ink); background:var(--bg); }
+  header { display:flex; align-items:center; gap:12px; padding:12px 18px; background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:10; }
+  header h1 { font-size:16px; margin:0; }
+  #health { color:var(--muted); font-size:12.5px; }
+  nav { display:flex; flex-wrap:wrap; gap:6px; padding:10px 18px 0; }
+  nav button { border:1px solid var(--line); background:#fff; color:var(--ink); padding:7px 13px; border-radius:10px; cursor:pointer; font-size:13px; }
+  nav button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  main { padding:14px 18px 60px; max-width:1080px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:12px; }
+  .card h2 { font-size:14px; margin:0 0 8px; }
+  .muted { color:var(--muted); font-size:12.5px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button.btn { border:1px solid var(--line); background:#fff; padding:6px 12px; border-radius:9px; cursor:pointer; font-size:13px; }
+  button.btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.btn.danger { color:#c33; }
+  textarea { width:100%; min-height:320px; font:13px/1.65 Consolas,Menlo,monospace; padding:10px 12px; border:1px solid var(--line); border-radius:10px; resize:vertical; background:#fcfdff; }
+  input[type=text], input[type=password], input[type=number], select { padding:7px 10px; border:1px solid var(--line); border-radius:9px; font:13px inherit; }
+  .grid { display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .field label { font-size:12px; color:var(--muted); }
+  .mem { border:1px solid var(--line); border-radius:11px; padding:9px 11px; margin-bottom:8px; background:#fbfdff; font-size:13px; }
+  .mem .t { font-weight:600; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:999px; background:#eef2ff; color:var(--accent); font-size:11.5px; margin-left:6px; }
+  .toast { position:fixed; right:18px; bottom:18px; background:#1c2333; color:#fff; padding:10px 14px; border-radius:10px; opacity:0; transition:.2s; font-size:13px; }
+  .toast.show { opacity:1; }
+  pre { background:#0f1420; color:#d7e0f5; padding:12px; border-radius:10px; overflow:auto; font-size:12.5px; }
+  details summary { cursor:pointer; color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>她的控制台</h1>
+  <span id="health">连接中…</span>
+  <span style="flex:1"></span>
+  <button class="btn" onclick="loadAll()">刷新</button>
+</header>
+
+<nav id="nav"></nav>
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = "__MIND_TOKEN__";
+const VERSION = "__MIND_VERSION__";
+const TABS = [
+  ["status",   "📊 状态"],
+  ["persona",  "🧬 人格文档"],
+  ["seed",     "📖 初始记忆"],
+  ["memory",   "🧩 记忆库"],
+  ["habits",   "🗣 哥哥的习惯"],
+  ["diary",    "📔 日记"],
+  ["config",   "⚙️ 配置"],
+  ["raw",      "🗂 原始文件"],
+];
+let tab = "status";
+
+const $ = (id) => document.getElementById(id);
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+async function api(path, init) {
+  const r = await fetch(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + TOKEN, ...(init?.headers || {}) },
+  });
+  const txt = await r.text();
+  let data; try { data = JSON.parse(txt); } catch { data = { raw: txt }; }
+  if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+  return data;
+}
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+// ---------------- 状态 ----------------
+async function renderStatus() {
+  const h = await api("/v1/health");
+  const st = await api("/v1/state");
+  $("main").innerHTML = `
+    <div class="card">
+      <h2>运行状态</h2>
+      <div class="row">
+        <span class="pill">v${esc(h.version)}</span>
+        <span class="pill">LLM ${esc(h.llm.mode)}${h.llm.hasKey ? " ✓" : "（缺 Key）"}</span>
+        <span class="pill">情景 ${h.memory.episodes}</span>
+        <span class="pill">情绪 ${h.memory.emotions}</span>
+        <span class="pill">哥哥的习惯 ${h.memory.habits ?? 0}</span>
+        <span class="pill">日记 ${h.memory.digests} 天</span>
+        <span class="pill">${esc(h.persona.name)} ${h.persona.age} 岁</span>
+      </div>
+      <div class="muted" style="margin-top:8px">
+        空闲判定：${h.idle.idle ? "✅ 空闲（可以总结）" : "⏸ " + esc(h.idle.reason)}<br>
+        待总结队列：${h.queue.length ? h.queue.join("、") : "（空）"}<br>
+        回收站：${h.trash.length ? h.trash.map(t => t.date + " (" + t.sizeKB + "KB)").join("、") : "（空）"}
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" onclick="runTick()">现在跑一次总结</button>
+        <button class="btn" onclick="reindex()">重建索引</button>
+        <button class="btn" onclick="backup()">立即备份</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>运行状态（原始）</h2>
+      <pre>${esc(JSON.stringify(st, null, 2))}</pre>
+    </div>`;
+}
+async function runTick() { try { const r = await api("/v1/job/run", { method: "POST", body: JSON.stringify({ job: "tick" }) }); toast(r?.tick?.note || "已触发"); setTimeout(renderStatus, 800); } catch (e) { toast("失败：" + e.message); } }
+async function reindex() { try { const r = await api("/v1/memory/reindex", { method: "POST" }); toast("索引重建完成：" + r.tokens + " 个 token"); } catch (e) { toast("失败：" + e.message); } }
+async function backup() { try { const r = await api("/v1/backup", { method: "POST" }); toast("已备份到 " + r.dir); } catch (e) { toast("失败：" + e.message); } }
+
+// ---------------- 文档编辑（人格 / 初始记忆 / 配置） ----------------
+async function renderDoc(key) {
+  const d = await api("/v1/docs/read?key=" + key);
+  const isJson = key === "config";
+  $("main").innerHTML = `
+    <div class="card">
+      <h2>${esc(d.label)}</h2>
+      <div class="muted">${esc(d.note)}<br>文件：${esc(d.path)}</div>
+      <div style="margin-top:10px"><textarea id="doc" spellcheck="false">${esc(d.content)}</textarea></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" onclick="saveDoc('${key}')">保存</button>
+        ${key === "persona" ? '<button class="btn" onclick="reloadPersona()">重载并查看注入内容</button>' : ""}
+        ${key === "episodic" || key === "emotional" ? '<button class="btn" onclick="reindex()">保存后重建索引</button>' : ""}
+        <span class="muted" id="docInfo">${isJson ? "保存前会校验 JSON；写前自动备份" : "写前自动备份到 data/backups/edits/"}</span>
+      </div>
+    </div>
+    <div class="card" id="personaPreview"></div>`;
+  if (key === "persona") reloadPersona();
+}
+async function saveDoc(key) {
+  try {
+    const r = await api("/v1/docs/write", { method: "POST", body: JSON.stringify({ key, content: $("doc").value }) });
+    toast("已保存" + (r.backup ? "（备份 " + r.backup + "）" : ""));
+    if (key === "config") loadAll();
+  } catch (e) { toast("保存失败：" + e.message); }
+}
+async function reloadPersona() {
+  try {
+    await api("/v1/persona/reload", { method: "POST" });
+    const p = await api("/v1/persona");
+    $("personaPreview").innerHTML = `<h2>现在注入给她的人格（${esc(p.self)}）</h2><pre>${esc(p.base)}</pre>
+      <div class="muted">段落：${p.sections.map(s => s.no + "." + esc(s.title)).join(" ｜ ")}</div>`;
+  } catch (e) { $("personaPreview").innerHTML = `<div class="muted">读取失败：${esc(e.message)}</div>`; }
+}
+
+// ---------------- 记忆库 ----------------
+async function renderMemory() {
+  const list = await api("/v1/memory/list?limit=300");
+  $("main").innerHTML = `
+    <div class="card">
+      <h2>检索测试</h2>
+      <div class="row">
+        <input type="text" id="q" placeholder="输入一句话，看能想起什么" style="flex:1;min-width:240px">
+        <button class="btn primary" onclick="doSearch()">检索</button>
+      </div>
+      <div id="sres" class="muted" style="margin-top:8px">（检索结果会显示分数与命中原因）</div>
+    </div>
+    <div class="card">
+      <h2>情景记忆（${list.items.length} 条）</h2>
+      ${list.items.map(m => memCard(m)).join("") || '<div class="muted">还没有记忆</div>'}
+    </div>`;
+}
+function memCard(m) {
+  const emo = m.emotion ? `<span class="pill">${esc(m.emotion.emotion)} ${m.emotion.valence}</span>` : "";
+  return `<div class="mem" id="m-${esc(m.id)}">
+    <div class="t">[${esc(m.date)}] ${esc(m.title)} <span class="pill">拟人价值 ${m.salience}</span>${emo}</div>
+    <div>${esc(m.summary)}</div>
+    ${m.review ? `<div style="margin-top:4px;color:#0a7d47">↳ 复盘：${esc(m.review)}</div>` : ""}
+    <div class="muted">证据：${(m.evidence || []).join(", ")}${(m.keywords || []).length ? " ｜ 关键词：" + m.keywords.join("、") : ""}</div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn" onclick="editMem('${esc(m.id)}')">编辑</button>
+      <button class="btn danger" onclick="forgetMem('${esc(m.id)}')">删除</button>
+    </div>
+  </div>`;
+}
+async function doSearch() {
+  const q = $("q").value.trim(); if (!q) return;
+  const r = await api("/v1/memory/search?q=" + encodeURIComponent(q) + "&explain=1");
+  $("sres").innerHTML = r.items.length
+    ? r.items.map(i => `<div class="mem"><div class="t">${esc(i.title)} <span class="pill">${i.score}</span></div>${esc(i.summary)}<div class="muted">${esc((i.reasons || []).join("；"))}</div></div>`).join("")
+    : "没有命中（可以点「重建索引」后再试）";
+}
+async function editMem(id) {
+  const list = await api("/v1/memory/list?limit=300");
+  const m = list.items.find(x => x.id === id); if (!m) return;
+  const title = prompt("标题", m.title); if (title === null) return;
+  const summary = prompt("摘要", m.summary); if (summary === null) return;
+  const review = prompt("复盘（从这件事学到了什么，留空=没有）", m.review || ""); if (review === null) return;
+  const sal = prompt("拟人价值 0~1（她有多像个真人）", m.salience); if (sal === null) return;
+  const kw = prompt("关键词（逗号分隔）", (m.keywords || []).join(",")); if (kw === null) return;
+  await api("/v1/memory/edit", { method: "POST", body: JSON.stringify({ episodeId: id, patch: { title, summary, review: review || undefined, salience: Number(sal) || 0.5, keywords: kw.split(",").map(s => s.trim()).filter(Boolean) } }) });
+  toast("已保存"); renderMemory();
+}
+async function forgetMem(id) {
+  if (!confirm("删掉这条记忆？")) return;
+  await api("/v1/memory/forget", { method: "POST", body: JSON.stringify({ ids: [id] }) });
+  toast("已删除"); renderMemory();
+}
+
+// ---------------- 哥哥的习惯（情景记忆的分支） ----------------
+let habitFilter = "";
+async function renderHabits() {
+  const d = await api("/v1/habits" + (habitFilter ? "?q=" + encodeURIComponent(habitFilter) : ""));
+  $("main").innerHTML = `
+    <div class="card">
+      <h2>他在纠正她什么（试一句）</h2>
+      <div class="muted">输入他说的一句话，看会踩到哪几条习惯 —— 这一步不调模型，是纯匹配。</div>
+      <div class="row" style="margin-top:8px">
+        <input type="text" id="hq" placeholder="废话，谁家好人半夜10点还没吃饭" style="flex:1;min-width:240px">
+        <button class="btn primary" onclick="tryHabit()">试一句</button>
+      </div>
+      <div id="htry" class="muted" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h2>账本（${d.count} / 共 ${d.total} 条）</h2>
+      <div class="muted">每条都是"他这么说 = 其实什么意思"。来源：<b>correct</b>=他当场纠正（实时入账）｜<b>summary</b>=日总结抽取｜<b>import</b>=手工补的。</div>
+      <div class="row" style="margin-top:8px">
+        <input type="text" id="hfilter" placeholder="过滤…" value="${esc(habitFilter)}" style="flex:1;min-width:200px">
+        <button class="btn" onclick="filterHabits()">过滤</button>
+        <button class="btn" onclick="addHabit()">补一条</button>
+        <button class="btn" onclick="rebuildHabits()">重建习惯索引</button>
+      </div>
+    </div>
+    <div class="card">
+      ${d.items.map(h => habitCard(h)).join("") || '<div class="muted">还是空的。等他哪天说"我说 X 的意思是 Y"，或者跑一次日总结，就会自己攒起来。</div>'}
+    </div>`;
+}
+function habitCard(h) {
+  const bits = [
+    h.tone ? `<span class="pill">语气 ${esc(h.tone)}</span>` : "",
+    `<span class="pill">确认 ${h.confirmations} 次</span>`,
+    `<span class="pill">可信 ${h.confidence}</span>`,
+    `<span class="pill">${esc(h.source)}</span>`,
+    `<span class="pill">${esc(h.last_seen)}</span>`,
+  ].join(" ");
+  return `<div class="mem">
+    <div class="t">「${esc(h.key)}」= ${esc(h.meaning)} ${bits}</div>
+    ${h.misunderstood ? `<div style="color:#b45309">↳ 以前理解成：${esc(h.misunderstood)}</div>` : ""}
+    ${h.behavior ? `<div class="muted">↳ 下次该这么接：${esc(h.behavior)}</div>` : ""}
+    <div class="muted">${(h.tags || []).length ? "标签：" + h.tags.map(esc).join("、") + " ｜ " : ""}证据：${(h.evidence || []).join(", ") || "（无）"}</div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn" onclick="editHabit('${esc(h.id)}')">编辑</button>
+      <button class="btn danger" onclick="forgetHabit('${esc(h.id)}')">删除</button>
+    </div>
+  </div>`;
+}
+async function tryHabit() {
+  const q = $("hq").value.trim(); if (!q) return;
+  const r = await api("/v1/habits/try?q=" + encodeURIComponent(q));
+  $("htry").innerHTML = r.matches.length
+    ? r.matches.map(m => `<div class="mem"><div class="t">「${esc(m.key)}」= ${esc(m.meaning)} <span class="pill">分 ${m.score}</span></div><div class="muted">${esc(m.reasons.join("；"))}</div></div>`).join("")
+      + `<div class="muted" style="margin-top:6px">注入文本：<pre>${esc(r.text)}</pre></div>`
+    : "没有命中任何习惯（这句话不会被特殊对待，按平常回）";
+}
+function filterHabits() { habitFilter = $("hfilter").value.trim(); renderHabits(); }
+async function editHabit(id) {
+  const d = await api("/v1/habits");
+  const h = d.items.find(x => x.id === id); if (!h) return;
+  const key = prompt("他说法是（原话）", h.key); if (key === null) return;
+  const meaning = prompt("真实意思", h.meaning); if (meaning === null) return;
+  const mis = prompt("以前理解成（留空=没有）", h.misunderstood || ""); if (mis === null) return;
+  const tone = prompt("语气（反讽/嫌弃/敷衍/认真…，留空=没有）", h.tone || ""); if (tone === null) return;
+  const behavior = prompt("下次该这么接", h.behavior || ""); if (behavior === null) return;
+  await api("/v1/habits/edit", { method: "POST", body: JSON.stringify({ id, patch: {
+    key, meaning, misunderstood: mis || undefined, tone: tone || undefined, behavior: behavior || undefined,
+  } }) });
+  toast("已保存"); renderHabits();
+}
+async function forgetHabit(id) {
+  if (!confirm("删掉这条哥哥的习惯？")) return;
+  await api("/v1/habits/forget", { method: "POST", body: JSON.stringify({ id }) });
+  toast("已删除"); renderHabits();
+}
+async function rebuildHabits() {
+  try { const r = await api("/v1/habits/rebuild", { method: "POST" }); toast("习惯索引重建完成：" + r.tokens + " 个 token"); }
+  catch (e) { toast("失败：" + e.message); }
+}
+async function addHabit() {
+  const key = prompt("他说法（2~24 字）"); if (!key) return;
+  const meaning = prompt("真实意思"); if (!meaning) return;
+  await api("/v1/habits/add", { method: "POST", body: JSON.stringify({ key, meaning }) });
+  toast("已补录"); renderHabits();
+}
+
+// ---------------- 日记 ----------------
+async function renderDiary() {
+  const list = await api("/v1/memory/diaries?n=60");
+  if (!list.dates.length) { $("main").innerHTML = '<div class="card muted">还没有日记。聊一天，等她空闲时就会写下来。</div>'; return; }
+  $("main").innerHTML = `
+    <div class="card">
+      <div class="row"><span class="muted">选择日期</span>
+        <select id="date" onchange="loadDiary()">${list.dates.map(d => `<option>${d}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div id="dview"></div>`;
+  loadDiary();
+}
+async function loadDiary() {
+  const date = $("date").value;
+  const d = await api("/v1/memory/diary?date=" + date);
+  const g = d.digest;
+  if (!g) { $("dview").innerHTML = '<div class="card muted">这天还没有档案卡</div>'; return; }
+  $("dview").innerHTML = `
+    <div class="card">
+      <h2>${date} 的日记 ${g.edited_by === "user" ? '<span class="pill">你改过</span>' : ""}</h2>
+      <textarea id="diary" style="min-height:220px">${esc(g.diary)}</textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" onclick="saveDiary('${date}')">保存日记</button>
+        <span class="muted">模型：${esc(g.model)}｜情景 ${g.episodes.length}｜情绪 ${g.emotions.length}｜丢弃 ${(g.dropped || []).length}</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>这天的记忆</h2>
+      ${g.episodes.map(e => { const em = g.emotions.find(x => x.episode_id === e.id); return `<div class="mem"><div class="t">${esc(e.title)}${em ? '<span class="pill">' + esc(em.emotion) + '</span>' : ""}</div>${esc(e.summary)}<div class="muted">证据：${e.evidence.join(", ")}</div></div>`; }).join("") || '<div class="muted">（无）</div>'}
+      ${(g.open_threads || []).length ? "<h2>未完结</h2>" + g.open_threads.map(t => `<div class="mem">⏳ ${esc(t.text)}</div>`).join("") : ""}
+      ${(g.dropped || []).length ? `<details><summary>被证据校验丢弃 ${g.dropped.length} 条</summary>` + g.dropped.map(x => `<div class="muted">✗ ${esc(x.detail)}</div>`).join("") + "</details>" : ""}
+    </div>
+    <div class="card">
+      <h2>当时的原话（回收站清掉后就没了）</h2>
+      <details><summary>展开 ${d.raw.count} 条</summary>${d.raw.items.map(m => `<div class="muted">${m.role === "user" ? "哥哥" : "她"}：${esc(m.text)}</div>`).join("")}</details>
+    </div>`;
+}
+async function saveDiary(date) { await api("/v1/memory/edit", { method: "POST", body: JSON.stringify({ date, diary: $("diary").value }) }); toast("已保存（标为你改过）"); }
+
+// ---------------- 配置（模型 / 联网搜索 / 常用项） ----------------
+const val = (id) => ($(id)?.value ?? "").trim();
+const num = (id) => Number(val(id));
+
+async function renderConfig() {
+  const c = await api("/v1/config");
+  const prov = [
+    ["none", "不启用"],
+    ["bocha", "博查 Bocha（国内可用）"],
+    ["tavily", "Tavily"],
+    ["serper", "Serper (Google)"],
+    ["searxng", "SearXNG（自建，免 Key）"],
+    ["custom", "自定义端点"],
+  ];
+  $("main").innerHTML = `
+    <div class="card">
+      <h2>🧠 模型（她用哪个大模型）</h2>
+      <div class="grid">
+        <div class="field"><label>模式</label>
+          <select id="c_mode">
+            <option value="deepseek" ${c.llm.mode === "deepseek" ? "selected" : ""}>deepseek（真实调用）</option>
+            <option value="mock" ${c.llm.mode === "mock" ? "selected" : ""}>mock（离线自测）</option>
+          </select></div>
+        <div class="field"><label>API 地址</label><input type="text" id="c_baseUrl" value="${esc(c.llm.baseUrl)}"></div>
+        <div class="field"><label>API Key ${c.llm.apiKeySet ? "✅ 已配置（留空=不改动）" : "❌ 还没配"}</label>
+          <input type="password" id="c_apiKey" placeholder="${c.llm.apiKeySet ? "已配置，留空则不改" : "sk-..."}"></div>
+        <div class="field"><label>对话模型</label><input type="text" id="c_model" value="${esc(c.llm.model)}"></div>
+        <div class="field"><label>总结/抽取模型</label><input type="text" id="c_summaryModel" value="${esc(c.llm.summaryModel)}"></div>
+        <div class="field"><label>对话温度（高=活泼；开了思考就无效）</label><input type="number" step="0.1" min="0" max="2" id="c_temperature" value="${c.llm.temperature}"></div>
+        <div class="field"><label>总结温度（低=稳；开了思考就无效）</label><input type="number" step="0.1" min="0" max="1" id="c_stemperature" value="${c.llm.summaryTemperature}"></div>
+        <div class="field"><label>🧠 思考程度（对话）</label>
+          <select id="c_thinking">
+            ${["off", "low", "high", "max"].map((v) => `<option value="${v}" ${c.llm.thinking === v ? "selected" : ""}>${v === "off" ? "off（不思考，最快）" : v === "max" ? "max（最大，最慢最准）" : v}</option>`).join("")}
+          </select></div>
+        <div class="field"><label>🧠 思考程度（日总结/抽取）</label>
+          <select id="c_sthinking">
+            ${["off", "low", "high", "max"].map((v) => `<option value="${v}" ${c.llm.summaryThinking === v ? "selected" : ""}>${v}</option>`).join("")}
+          </select></div>
+        <div class="field"><label>总结最大输出 token</label><input type="number" id="c_maxTok" value="${c.llm.maxTokensSummary}"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" onclick="saveModel()">保存模型设置</button>
+        <button class="btn" onclick="testLlm()">测试连接</button>
+        <span class="muted" id="llmTest">测试会真的发一次很小的请求</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔎 联网搜索（她想上网查东西时用）</h2>
+      <div class="grid">
+        <div class="field"><label>启用</label>
+          <select id="c_sEnabled">
+            <option value="0" ${!c.search.enabled ? "selected" : ""}>关闭</option>
+            <option value="1" ${c.search.enabled ? "selected" : ""}>开启</option>
+          </select></div>
+        <div class="field"><label>自动判断该不该联网</label>
+          <select id="c_sAuto">
+            <option value="1" ${c.search.auto ? "selected" : ""}>开（她自己决定，需要查时才查）</option>
+            <option value="0" ${!c.search.auto ? "selected" : ""}>关（只有你说"搜一下"才查）</option>
+          </select></div>
+        <div class="field"><label>供应商</label>
+          <select id="c_sProvider">${prov.map(([v, t]) => `<option value="${v}" ${c.search.provider === v ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+        <div class="field"><label>API Key ${c.search.apiKeySet ? "✅ 已配置（留空=不改动）" : ""}</label>
+          <input type="password" id="c_sKey" placeholder="${c.search.apiKeySet ? "已配置，留空则不改" : "按供应商要求填"}"></div>
+        <div class="field"><label>端点（留空用默认；SearXNG 填自建地址）</label><input type="text" id="c_sEndpoint" value="${esc(c.search.endpoint)}"></div>
+        <div class="field"><label>每次取几条</label><input type="number" id="c_sMax" value="${c.search.maxResults}"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" onclick="saveSearch()">保存搜索设置</button>
+        <input type="text" id="sTestQ" placeholder="测试查询，例如：今天天气" style="flex:1;min-width:170px">
+        <button class="btn" onclick="testSearch()">测试搜索</button>
+      </div>
+      <div id="sTestOut" class="muted" style="margin-top:8px">她只在你明确说"搜一下 xxx"时才联网，不会自己乱查。</div>
+    </div>
+
+    <div class="card">
+      <h2>⚙️ 常用设置</h2>
+      <div class="grid">
+        <div class="field"><label>空闲多久算可总结（分钟）</label><input type="number" id="c_idleMinutes" value="${c.idleMinutes}"></div>
+        <div class="field"><label>启动后多少分钟才考虑总结</label><input type="number" id="c_startupGraceMinutes" value="${c.startupGraceMinutes}"></div>
+        <div class="field"><label>两次总结最小间隔（分钟）</label><input type="number" id="c_summaryCooldownMinutes" value="${c.summaryCooldownMinutes}"></div>
+        <div class="field"><label>回收站保留天数</label><input type="number" id="c_trashDays" value="${c.trashDays}"></div>
+        <div class="field"><label>少于多少条有效消息不调 LLM</label><input type="number" id="c_minMessages" value="${c.minMessages}"></div>
+        <div class="field"><label>话题分段间隔（分钟）</label><input type="number" id="c_segmentGapMinutes" value="${c.segmentGapMinutes}"></div>
+        <div class="field"><label>她的生日（YYYY-MM-DD，空=固定年龄）</label><input type="text" id="c_birthDate" value="${esc(c.persona.birthDate || "")}"></div>
+        <div class="field"><label>固定年龄（生日为空时用）</label><input type="number" id="c_baseAge" value="${c.persona.baseAge}"></div>
+        <div class="field"><label>她的名字</label><input type="text" id="c_name" value="${esc(c.persona.name)}"></div>
+        <div class="field"><label>她怎么称呼你</label><input type="text" id="c_userName" value="${esc(c.persona.userName)}"></div>
+        <div class="field"><label>每次注入几条回忆</label><input type="number" id="c_topK" value="${c.retrieve.topK}"></div>
+        <div class="field"><label>回忆注入上限（字）</label><input type="number" id="c_maxChars" value="${c.retrieve.maxChars}"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" onclick="saveCommon()">保存常用设置</button>
+        <span class="muted">端口/令牌等请到「🗂 原始文件」改 config.json</span>
+      </div>
+    </div>`;
+}
+
+async function saveModel() {
+  const patch = {
+    llm: {
+      mode: val("c_mode"), baseUrl: val("c_baseUrl"), model: val("c_model"),
+      summaryModel: val("c_summaryModel"), temperature: num("c_temperature"),
+      summaryTemperature: num("c_stemperature"), maxTokensSummary: num("c_maxTok"),
+      thinking: val("c_thinking"), summaryThinking: val("c_sthinking"),
+    },
+  };
+  const k = val("c_apiKey");
+  if (k) patch.llm.apiKey = k; // 留空 = 不改动已有 Key
+  try { await api("/v1/config", { method: "POST", body: JSON.stringify(patch) }); toast("模型设置已保存"); loadHealth(); renderConfig(); }
+  catch (e) { toast("失败：" + e.message); }
+}
+async function testLlm() {
+  $("llmTest").textContent = "测试中…";
+  try {
+    const r = await api("/v1/llm/test", { method: "POST", body: JSON.stringify({ prompt: "在吗" }) });
+    $("llmTest").innerHTML = r.ok ? `✅ 通了：${esc(r.reply)}（${esc(r.model)}，${r.ms}ms）` : `❌ ${esc(r.error)}`;
+  } catch (e) { $("llmTest").textContent = "❌ " + e.message; }
+}
+async function saveSearch() {
+  const patch = { search: { enabled: val("c_sEnabled") === "1", auto: val("c_sAuto") === "1", provider: val("c_sProvider"), endpoint: val("c_sEndpoint"), maxResults: num("c_sMax") } };
+  const k = val("c_sKey");
+  if (k) patch.search.apiKey = k;
+  try { await api("/v1/config", { method: "POST", body: JSON.stringify(patch) }); toast("搜索设置已保存"); renderConfig(); }
+  catch (e) { toast("失败：" + e.message); }
+}
+async function testSearch() {
+  const q = val("sTestQ") || "今天天气";
+  $("sTestOut").textContent = "搜索中…";
+  try {
+    const r = await api("/v1/search?q=" + encodeURIComponent(q));
+    $("sTestOut").innerHTML = r.results.length
+      ? `✅ ${esc(r.provider)} 返回 ${r.results.length} 条（${r.ms}ms）：` +
+        r.results.map((x) => `<div class="mem"><div class="t">${esc(x.title)}</div>${esc(x.snippet)}<div class="muted">${esc(x.url)}</div></div>`).join("")
+      : "没结果";
+  } catch (e) { $("sTestOut").textContent = "❌ " + e.message; }
+}
+async function saveCommon() {
+  const patch = {
+    idleMinutes: num("c_idleMinutes"), startupGraceMinutes: num("c_startupGraceMinutes"),
+    summaryCooldownMinutes: num("c_summaryCooldownMinutes"), trashDays: num("c_trashDays"),
+    minMessages: num("c_minMessages"), segmentGapMinutes: num("c_segmentGapMinutes"),
+    persona: { name: val("c_name"), userName: val("c_userName"), baseAge: num("c_baseAge"), birthDate: val("c_birthDate") || null },
+    retrieve: { topK: num("c_topK"), maxChars: num("c_maxChars") },
+  };
+  try { await api("/v1/config", { method: "POST", body: JSON.stringify(patch) }); toast("已保存"); loadHealth(); }
+  catch (e) { toast("失败：" + e.message); }
+}
+
+// ---------------- 原始文件 ----------------
+async function renderRaw() {
+  const d = await api("/v1/docs");
+  $("main").innerHTML = `<div class="card"><h2>可编辑的文档</h2>
+    ${d.docs.map(x => `<div class="mem"><div class="t">${esc(x.label)}</div><div class="muted">${x.exists ? x.sizeKB + " KB ｜ " + x.mtime : "（还不存在）"}</div>
+      <div class="row" style="margin-top:6px"><button class="btn" onclick="go('${x.key}')">打开编辑</button></div></div>`).join("")}
+    <div class="muted">数据目录：${esc(d.root)}<br>这些文件都是明文，也能用记事本直接改。</div></div>`;
+}
+
+// ---------------- 框架 ----------------
+function go(t) { tab = t; render(); }
+async function loadHealth() {
+  try {
+    const h = await api("/v1/health");
+    $("health").textContent = `v${h.version} ｜ ${h.persona.name} ${h.persona.age} 岁 ｜ 情景 ${h.memory.episodes} · 情绪 ${h.memory.emotions} · 习惯 ${h.memory.habits ?? 0} · 日记 ${h.memory.digests} 天 ｜ LLM ${h.llm.mode}${h.llm.hasKey ? " ✓" : "（缺 Key）"}`;
+  } catch (e) { $("health").textContent = "连不上自己（" + e.message + "）"; }
+}
+async function render() {
+  $("nav").innerHTML = TABS.map(([k, label]) => `<button class="${k === tab ? "on" : ""}" onclick="go('${k}')">${label}</button>`).join("");
+  const main = $("main");
+  main.innerHTML = '<div class="card muted">读取中…</div>';
+  try {
+    if (tab === "status") await renderStatus();
+    else if (tab === "persona") await renderDoc("persona");
+    else if (tab === "seed") await renderDoc("seed");
+    else if (tab === "memory") await renderMemory();
+    else if (tab === "habits") await renderHabits();
+    else if (tab === "diary") await renderDiary();
+    else if (tab === "config") await renderConfig();
+    else if (tab === "raw") await renderRaw();
+  } catch (e) { main.innerHTML = `<div class="card muted">出错：${esc(e.message)}</div>`; }
+}
+function loadAll() { loadHealth(); render(); }
+loadAll();
+</script>
+</body>
+</html>

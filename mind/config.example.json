@@ -1,0 +1,11 @@
+{
+  "port": 8430,
+  "host": "127.0.0.1",
+  "token": "请替换为你自己的本地访问令牌",
+  "llm": {
+    "mode": "deepseek",
+    "baseUrl": "https://api.deepseek.com",
+    "apiKey": "请替换为你自己的 API Key",
+    "model": "deepseek-chat"
+  }
+}

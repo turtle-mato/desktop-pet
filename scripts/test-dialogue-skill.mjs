@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+import {tsLoader} from './test-utils.mjs';
+const source=rel=>fileURLToPath(new URL('../../mind/'+rel,import.meta.url));
+const skillFile=source('docs/skills/dialogue/SKILL.md');
+const persona=source('docs/设定/林阅心.md');
+const hash=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+const before=hash(persona);
+let body='---\r\nname: dialogue\r\ndescription: test\r\n---\r\n# Voice\r\n保留原角色语气。',mtime=1,fail=false,reads=0;
+const load=tsLoader({'node:fs':{statSync:()=>{if(fail)throw Error('missing');return {isFile:()=>true,size:Buffer.byteLength(body),mtimeMs:mtime,ctimeMs:mtime};},readFileSync:()=>{reads++;return body;}},'./paths.ts':{P:{dialogueSkill:'virtual-skill'}}});
+const {dialogueSkill}=load(source('server/lib/dialogueSkill.ts'));
+assert.match(dialogueSkill(),/原角色语气/);assert.ok(!dialogueSkill().includes('description:'));assert.equal(reads,1);
+body='# 更新\n增加轻微活泼感。';mtime++;assert.match(dialogueSkill(),/轻微活泼感/);assert.equal(reads,2,'修改skill无需再次重启');
+fail=true;assert.equal(dialogueSkill(),'','缺失skill不阻断正常聊天');fail=false;
+body='x'.repeat(33000);mtime++;assert.equal(dialogueSkill(),'','异常超长文件不挤占上下文');
+let promptMsgs,reviewMsgs;
+const captureLoader=tsLoader({'node:fs':{...fs,default:fs},'./paths.ts':{P:{dialogueSkill:skillFile,personaDoc:persona}},
+ './llm.ts':{chatStream:async(c,m)=>{reviewMsgs=m;return {text:'怎么这样。关心一下还要查成分啊。',usage:{}};}},
+ './attachments.ts':{withChatImages:m=>m}});
+const cfg={persona:{name:'林阅心',userName:'哥',birthDate:null,baseAge:15},llm:{}};
+const {buildReplyMessages}=captureLoader(source('server/lib/prompts.ts'));
+promptMsgs=buildReplyMessages(cfg,{history:[{role:'assistant',content:'我饿了'}],userText:'你个AI饿什么',memoryText:'',threadsText:''});
+const index=promptMsgs.findIndex(m=>m.content.includes('【对话skill：接梗与轻抗议】'));
+assert.equal(index,promptMsgs.length-2,'规则紧挨当前用户轮次，不被旧助手错误覆盖');
+assert.equal(promptMsgs.at(-1).content,'你个AI饿什么');assert.ok(promptMsgs[index].content.includes('不把猜测解释成关心'),'voice skill retains the correction boundary');
+const {reviewDialogueReply}=captureLoader(source('server/lib/dialogueReview.ts'));
+await reviewDialogueReply(cfg,[],'你个AI饿什么','我没有胃，饿是演的。');
+assert.match(reviewMsgs[0].content,/【对话skill：接梗与轻抗议】/,'复核器不能把性格重新抹平');
+assert.equal(hash(persona),before,'原人格原文不变');
+console.log('dialogue skill: actual-file integration in reply/review, hot reload, cache/missing/size protection, latest-turn placement and original persona unchanged passed');
